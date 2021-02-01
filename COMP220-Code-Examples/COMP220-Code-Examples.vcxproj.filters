@@ -19,4 +19,14 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="basicShaderTest.glsl">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="basicShaderTest2.glsl">
+      <Filter>Source Files</Filter>
+    </Text>
+  </ItemGroup>
 </Project>
