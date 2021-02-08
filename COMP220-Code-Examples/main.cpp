@@ -1,6 +1,9 @@
 #include <iostream>
 #include <SDL.h>
 #include <gl\glew.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <SDL_opengl.h>
 #include <fstream>
 #include <sstream>
@@ -114,7 +117,7 @@ int main(int argc, char ** argsv)
 
 	//Create a window, note we have to free the pointer returned using the DestroyWindow Function
 	//https://wiki.libsdl.org/SDL_CreateWindow
-	SDL_Window* window = SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, SDL_WINDOW_OPENGL);	
+	SDL_Window* window = SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 720, 720, SDL_WINDOW_OPENGL);	
 	//Checks to see if the window has been created, the pointer will have a value of some kind
 	if (window == nullptr)
 	{
@@ -138,16 +141,24 @@ int main(int argc, char ** argsv)
 			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Unable to initialise GLEW", (char*)glewGetErrorString(glewError), NULL);
 	}
 
+	// Creating Vertex Array ID
 	GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
 	glBindVertexArray(VertexArrayID);
 
 	// An array of 3 vectors which represents 3 vertices
 	static const GLfloat g_vertex_buffer_data[] = {
-		// Positions			// Colours
-		-0.5f, -0.5f, 0.0f,		rand(), rand(),
-		0.0f, 0.5f, 0.0f,		rand(), rand(),
-		0.5f, -0.5f, 0.0f,		rand(), rand(),
+		// Positions				// Colours
+		-0.75f, -0.5f, 0.0f,		(float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100,   // Vertex B
+		0.75f, -0.5f, 0.0f,			(float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100,   // Vertex C
+		0.75f, 0.5f, 0.0f,			(float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100,   // Vertex D
+		-0.75f, 0.5f, 0.0f,			(float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100, (float)(rand() % 100 + 1) / 100,   // Vertex A
+	};
+
+	// Triangle indices - note anticlockwise ordering!
+	static const GLuint g_vertex_indices[] = {
+		0, 1, 2,    // First Triangle, BCD
+		2, 3, 0     // Second Triangle, DAB
 	};
 
 	// This will identify our vertex buffer
@@ -164,10 +175,10 @@ int main(int argc, char ** argsv)
 	glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
 	glVertexAttribPointer(
 		0,                  // attribute 0. No particular reason for 0, but must match the layout in the shader.
-		2,                  // size
+		3,                  // size
 		GL_FLOAT,           // type
 		GL_FALSE,           // normalized?
-		5 * sizeof(GL_FLOAT),                  // stride
+		6 * sizeof(GL_FLOAT),                  // stride
 		(void*)0           // array buffer offset
 	);
 
@@ -179,11 +190,24 @@ int main(int argc, char ** argsv)
 		3,                  // size
 		GL_FLOAT,           // type
 		GL_FALSE,           // normalized?
-		5*sizeof(GL_FLOAT),                  // stride
+		6*sizeof(GL_FLOAT),                  // stride
 		(void*)(3 * sizeof(GL_FLOAT))            // array buffer offset
 	);
 
+	// Element Buffer
+	GLuint elementbuffer;
+	glGenBuffers(1, &elementbuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(g_vertex_indices), g_vertex_indices, GL_STATIC_DRAW);
+
 	GLuint programID = LoadShaders("basicShaderTest.glsl", "basicShaderTest2.glsl");
+
+	// Transforms
+	glm::mat4 trans = glm::mat4(1.0f);
+	trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
+
+	unsigned int transformLoc = glGetUniformLocation(programID, "transform");
 
 	//Event loop, we will loop until running is set to false, usually if escape has been pressed or window is closed
 	bool running = true;
@@ -220,8 +244,13 @@ int main(int argc, char ** argsv)
 
 		glUseProgram(programID);
 
-		// Draw the triangle !
-		glDrawArrays(GL_TRIANGLES, 0, 3); // Starting from vertex 0; 3 vertices total -> 1 triangle
+		glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+
+		// Draw a triangle
+		// glDrawArrays(GL_TRIANGLES, 0, 3); // Starting from vertex 0; 3 vertices total -> 1 triangle
+
+		// Draw a square (elements)
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)0);
 
 		SDL_GL_SwapWindow(window);
 	}
