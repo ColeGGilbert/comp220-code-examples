@@ -269,6 +269,7 @@ int main(int argc, char ** argsv)
 	glm::mat4 mvp, view, projection;
 	glm::vec3 position(0, 0, -2), forward(0, 0, -1), right(1, 0, 0), rotation(0);
 	const glm::vec4 cameraFace(0, 0, 1, 0);
+	const glm::vec4 cameraSide(1, 0, 0, 0);
 	const float walkSpeed = 0.5f, rotSpeed = 0.1f;
 
 	unsigned int transformLoc = glGetUniformLocation(i_engine.programID, "transform");
@@ -312,7 +313,7 @@ int main(int argc, char ** argsv)
 				viewRotate = glm::rotate(viewRotate, glm::radians(rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
 				forward = glm::normalize(glm::vec3(viewRotate * cameraFace));
 
-				//right = glm::normalize(glm::vec3(viewRotate * cameraFace));
+				right = glm::normalize(glm::vec3(viewRotate * cameraSide));
 				
 				break;
 			}
