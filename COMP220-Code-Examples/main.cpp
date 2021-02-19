@@ -10,6 +10,9 @@
 #include <vector>
 #include <cstdlib>
 
+int xWidth[4] = { 640, 852, 1280, 1920 };
+int yHeight[4] = { 360, 480, 720, 1080 };
+
 GLuint LoadShaders(const char* vertex_file_path, const char* fragment_file_path)
 {
 
@@ -100,10 +103,22 @@ GLuint LoadShaders(const char* vertex_file_path, const char* fragment_file_path)
 	return ProgramID;
 }
 
-int main(int argc, char ** argsv)
+struct Engine
 {
+	SDL_Window* window;
+	SDL_GLContext glContext;
+	GLuint programID;
+};
 
-	srand(time(0));
+struct Initialisation 
+{
+	Engine eng;
+	int fail;
+};
+
+Initialisation InitialiseEngine(const char* windowName)
+{
+	Initialisation init;
 
 	//Initialises the SDL Library, passing in SDL_INIT_VIDEO to only initialise the video subsystems
 	//https://wiki.libsdl.org/SDL_Init
@@ -112,24 +127,34 @@ int main(int argc, char ** argsv)
 		//Display an error message box
 		//https://wiki.libsdl.org/SDL_ShowSimpleMessageBox
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL_Init failed", SDL_GetError(), NULL);
-		return 1;
+		init.fail = 1;
+		return init;
 	}
 
 	//Create a window, note we have to free the pointer returned using the DestroyWindow Function
 	//https://wiki.libsdl.org/SDL_CreateWindow
-	SDL_Window* window = SDL_CreateWindow("SDL2 Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, SDL_WINDOW_OPENGL);	
+	init.eng.window =
+		SDL_CreateWindow(
+			windowName,
+			SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED,
+			xWidth[0], yHeight[0],
+			SDL_WINDOW_OPENGL
+		);
+
 	//Checks to see if the window has been created, the pointer will have a value of some kind
-	if (window == nullptr)
+	if (init.eng.window == nullptr)
 	{
 		//Show error
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL_CreateWindow failed", SDL_GetError(), NULL);
 		//Close the SDL Library
 		//https://wiki.libsdl.org/SDL_Quit
 		SDL_Quit();
-		return 1;
+		init.fail = 1;
+		return init;
 	}
 
-	SDL_GLContext glContext = SDL_GL_CreateContext(window);
+	init.eng.glContext = SDL_GL_CreateContext(init.eng.window);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -138,9 +163,45 @@ int main(int argc, char ** argsv)
 	GLenum glewError = glewInit();
 	if (glewError != GLEW_OK)
 	{
-			SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Unable to initialise GLEW", (char*)glewGetErrorString(glewError), NULL);
+		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Unable to initialise GLEW", (char*)glewGetErrorString(glewError), NULL);
 	}
 
+	init.eng.programID = LoadShaders("basicShaderTest.glsl", "basicShaderTest2.glsl");
+
+	return init;
+}
+
+Engine i_engine;
+
+void UpdateWindowSize(int i)
+{
+	SDL_SetWindowSize(i_engine.window, xWidth[i], yHeight[i]);
+	glViewport(0, 0, xWidth[i], yHeight[i]);
+	SDL_SetWindowPosition(i_engine.window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+}
+
+glm::mat4 ApplyTransformation(glm::mat4 object, float rotation = 0.0f, glm::vec3 rotatePos = glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3 scale = glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3 translation = glm::vec3(0.0f, 0.0f, 0.0f))
+{
+	object = glm::rotate(object, rotation, rotatePos);
+	object = glm::scale(object, scale);
+	object = glm::translate(object, translation);
+	return object;
+}
+
+int main(int argc, char ** argsv)
+{
+	srand(time(0));
+
+	Initialisation init = InitialiseEngine("Cole's Random Colour Square");
+
+	if (init.fail == 1) 
+	{
+		return 1;
+	}
+
+	i_engine = init.eng;
+
+	#pragma region ObjectVertices
 	// Creating Vertex Array ID
 	GLuint VertexArrayID;
 	glGenVertexArrays(1, &VertexArrayID);
@@ -199,23 +260,22 @@ int main(int argc, char ** argsv)
 	glGenBuffers(1, &elementbuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(g_vertex_indices), g_vertex_indices, GL_STATIC_DRAW);
-
-	GLuint programID = LoadShaders("basicShaderTest.glsl", "basicShaderTest2.glsl");
+	#pragma endregion
 
 	// Transforms that are applied to the scene view object
-
 	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+	model = ApplyTransformation(model, 90.0f, glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.5f, 0.5f, 0.5f));
 
 	glm::mat4 mvp, view, projection;
 	glm::vec3 position(0, 0, -2), forward(0, 0, -1), right(1, 0, 0), rotation(0);
-	const glm::vec4 cameraFace(0, 0, -1, 0);
+	const glm::vec4 cameraFace(0, 0, 1, 0);
 	const float walkSpeed = 0.5f, rotSpeed = 0.1f;
 
-	unsigned int transformLoc = glGetUniformLocation(programID, "transform");
+	unsigned int transformLoc = glGetUniformLocation(i_engine.programID, "transform");
 
-	
+	bool fullscreen = false;
+
+	int currentSize = 0;
 
 	//Event loop, we will loop until running is set to false, usually if escape has been pressed or window is closed
 	bool running = true;
@@ -261,11 +321,46 @@ int main(int argc, char ** argsv)
 				//Check the actual key code of the key that has been pressed
 				switch (ev.key.keysym.sym)
 				{
+
+				#pragma region ScreenResizing
+				case SDLK_F11:
+					fullscreen = !fullscreen;
+					if (fullscreen) 
+					{
+						UpdateWindowSize(sizeof(xWidth) / sizeof(*xWidth)-1);
+					}
+
+					SDL_SetWindowFullscreen(i_engine.window, fullscreen);
+
+					if (!fullscreen) 
+					{
+						UpdateWindowSize(currentSize);
+					}
+					break;
+
+				case SDLK_UP:
+					if (currentSize < sizeof(xWidth) / sizeof(*xWidth) - 1)
+					{
+						currentSize++;
+						UpdateWindowSize(currentSize);
+					}
+					break;
+
+				case SDLK_DOWN:
+					if (currentSize > 0)
+					{
+						currentSize--;
+						UpdateWindowSize(currentSize);
+					}
+					break;
+				#pragma endregion
+
 					//Escape key
 				case SDLK_ESCAPE:
 					running = false;
 					break;
 
+				#pragma region MovementControls
 				case SDLK_w:
 					position += walkSpeed * forward;
 					break;
@@ -282,13 +377,14 @@ int main(int argc, char ** argsv)
 					position -= walkSpeed * right;
 					break;
 				}
+				#pragma endregion
 			}
 		}
 
 		glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glUseProgram(programID);
+		glUseProgram(i_engine.programID);
 
 		view = glm::lookAt(
 			position,
@@ -309,7 +405,7 @@ int main(int argc, char ** argsv)
 		// Draw a square (elements)
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)0);
 
-		SDL_GL_SwapWindow(window);
+		SDL_GL_SwapWindow(i_engine.window);
 	}
 
 
@@ -318,10 +414,10 @@ int main(int argc, char ** argsv)
 
 	glDeleteBuffers(1, &vertexbuffer);
 	glDeleteVertexArrays(1, &VertexArrayID);
-	SDL_GL_DeleteContext(glContext);
+	SDL_GL_DeleteContext(i_engine.glContext);
 	//Destroy the window and quit SDL2, NB we should do this after all cleanup in this order!!!
 	//https://wiki.libsdl.org/SDL_DestroyWindow
-	SDL_DestroyWindow(window);
+	SDL_DestroyWindow(i_engine.window);
 	//https://wiki.libsdl.org/SDL_Quit
 	SDL_Quit();
 
